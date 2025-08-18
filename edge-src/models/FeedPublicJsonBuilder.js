@@ -232,9 +232,36 @@ export default class FeedPublicJsonBuilder {
       newItem['external_url'] = mediaFile.url;
     }
 
-    newItem['content_html'] = item.description || '';
-    newItem['content_text'] = item.descriptionText || '';
+//    newItem['content_html'] = item.description || '';
+//    newItem['content_text'] = item.descriptionText || '';
 
+    // ==========================================================
+    // INÍCIO DA NOSSA MODIFICAÇÃO NO SERVIDOR
+    // ==========================================================
+    const metadataRegex = /\[meta\s+type="([^"]+)"\s+tags="([^"]*)"\]/s;
+    const rawHtml = item.description || '';
+    const match = rawHtml.match(metadataRegex);
+    let cleanedHtml = rawHtml;
+
+    // Adicionamos um objeto 'metadata' ao nosso objeto '_microfeed'
+    _microfeed.metadata = { type: 'geral', tags: [] };
+
+    if (match) {
+        // Se encontramos o shortcode, preenchemos os metadados
+        _microfeed.metadata.type = match[1];
+        _microfeed.metadata.tags = match[2] ? match[2].split(',') : [];
+        
+        // Removemos o shortcode do HTML que será exibido
+        cleanedHtml = rawHtml.replace(metadataRegex, '').trim();
+    }
+
+    // Usamos o HTML limpo para o conteúdo visível e o texto puro
+    newItem['content_html'] = cleanedHtml;
+    newItem['content_text'] = htmlToPlainText(cleanedHtml); // Recalculamos o texto puro a partir do HTML limpo
+    // ==========================================================
+    // FIM DA NOSSA MODIFICAÇÃO
+    // ==========================================================
+    
     if (item.image) {
       newItem['image'] = item.image;
     }
