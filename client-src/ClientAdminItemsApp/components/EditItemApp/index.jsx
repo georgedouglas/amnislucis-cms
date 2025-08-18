@@ -229,7 +229,7 @@ export default class EditItemApp extends React.Component {
     const {mediaFile} = item;
     const status = item.status || STATUSES.PUBLISHED;
     const webGlobalSettings = feed.settings.webGlobalSettings || {};
-    const publicBucketUrl = webGlobalGLobalSettings.publicBucketUrl || '';
+    const publicBucketUrl = webGlobalSettings.publicBucketUrl || '';
     let buttonText = 'Create';
     let submittingButtonText = 'Creating...';
     let currentPage = NAV_ITEMS.NEW_ITEM;
