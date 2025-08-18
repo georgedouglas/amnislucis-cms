@@ -30,6 +30,9 @@ import {getMediaFileFromUrl} from "../../../../common-src/MediaFileUtils";
 
 const SUBMIT_STATUS__START = 1;
 
+// NOVO: Nossa RegEx para encontrar e manipular os metadados
+const metadataRegex = /\[meta\s+type="([^"]+)"\s+tags="([^"]*)"\]\s*/s;
+
 function initItem(itemId) {
   return ({
     status: STATUSES.PUBLISHED,
@@ -50,6 +53,8 @@ export default class EditItemApp extends React.Component {
     this.onUpdateFeed = this.onUpdateFeed.bind(this);
     this.onUpdateItemMeta = this.onUpdateItemMeta.bind(this);
     this.onUpdateItemToFeed = this.onUpdateItemToFeed.bind(this);
+    // NOVO: Bind da nossa nova função
+    this._updateDescriptionWithMetadata = this._updateDescriptionWithMetadata.bind(this);
 
     const $feedContent = document.getElementById('feed-content');
     const $dataParams = document.getElementById('lh-data-params');
@@ -63,6 +68,7 @@ export default class EditItemApp extends React.Component {
     }
     const item = feed.item || initItem();
 
+    // MODIFICADO: Adicionamos o estado para nossos novos campos
     this.state = {
       feed,
       onboardingResult,
@@ -70,14 +76,52 @@ export default class EditItemApp extends React.Component {
       submitStatus: null,
       itemId: itemId || randomShortUUID(),
       action,
-
       userChangedLink: false,
       changed: false,
+      // NOVO: Estado para os campos de metadados
+      metadataType: 'geral', 
+      metadataTags: '',
     };
   }
 
+  // NOVO: Função para atualizar a description com base nos metadados
+  _updateDescriptionWithMetadata(newMeta) {
+    const { metadataType: currentType, metadataTags: currentTags } = this.state;
+    const newType = newMeta.type !== undefined ? newMeta.type : currentType;
+    const newTags = newMeta.tags !== undefined ? newMeta.tags : currentTags;
+    
+    this.setState({
+        metadataType: newType,
+        metadataTags: newTags,
+    });
+
+    const currentDescription = this.state.item.description || '';
+    const cleanedDescription = currentDescription.replace(metadataRegex, '');
+
+    // Não adiciona metadados se o tipo for 'geral'
+    if (newType === 'geral' || !newType) {
+        this.onUpdateItemMeta({ 'description': cleanedDescription });
+        return;
+    }
+    
+    const newShortcode = `[meta type="${newType}" tags="${newTags}"]`;
+    const finalDescription = `${newShortcode}\n\n${cleanedDescription}`;
+    
+    this.onUpdateItemMeta({ 'description': finalDescription });
+  }
+  
   componentDidMount() {
     preventCloseWhenChanged(() => this.state.changed);
+
+    // NOVO: Parsear a description ao carregar a página para popular os campos
+    const description = this.state.item.description || '';
+    const match = description.match(metadataRegex);
+    if (match) {
+        this.setState({
+            metadataType: match[1],
+            metadataTags: match[2],
+        });
+    }
 
     const {action, item} = this.state;
     if (action === 'create') {
@@ -179,14 +223,13 @@ export default class EditItemApp extends React.Component {
   }
 
   render() {
-    const {submitStatus, itemId, item, action, feed, onboardingResult, changed} = this.state;
+    // MODIFICADO: Extraímos os novos estados
+    const {submitStatus, itemId, item, action, feed, onboardingResult, changed, metadataType, metadataTags} = this.state;
     const submitting = submitStatus === SUBMIT_STATUS__START;
     const {mediaFile} = item;
     const status = item.status || STATUSES.PUBLISHED;
-
     const webGlobalSettings = feed.settings.webGlobalSettings || {};
-    const publicBucketUrl = webGlobalSettings.publicBucketUrl || '';
-
+    const publicBucketUrl = webGlobalGLobalSettings.publicBucketUrl || '';
     let buttonText = 'Create';
     let submittingButtonText = 'Creating...';
     let currentPage = NAV_ITEMS.NEW_ITEM;
@@ -209,6 +252,7 @@ export default class EditItemApp extends React.Component {
       <form className="grid grid-cols-12 gap-4">
         <div className="col-span-9 grid grid-cols-1 gap-4">
           <div className="lh-page-card">
+            
             <MediaManager
               labelComponent={<ExplainText bundle={CONTROLS_TEXTS_DICT[ITEM_CONTROLS.MEDIA_FILE]}/>}
               feed={feed}
@@ -288,11 +332,43 @@ export default class EditItemApp extends React.Component {
                 </div>
               </div>
             </div>
+
+            <div className="mt-8 pt-8 border-t">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Metadados da Aplicação</h3>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="metadata-type" className="block text-sm font-medium text-gray-700">
+                            Tipo de Conteúdo
+                        </label>
+                        <select
+                            id="metadata-type"
+                            name="metadata-type"
+                            className="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+                            value={metadataType}
+                            onChange={(e) => this._updateDescriptionWithMetadata({ type: e.target.value })}
+                        >
+                            <option value="geral">Geral</option>
+                            <option value="santo">Santo</option>
+                            <option value="oracao">Oração</option>
+                        </select>
+                    </div>
+                    <AdminInput
+                        labelComponent={<label className="block text-sm font-medium text-gray-700">Tags (separadas por vírgula)</label>}
+                        value={metadataTags}
+                        onChange={(e) => this._updateDescriptionWithMetadata({ tags: e.target.value })}
+                    />
+                </div>
+            </div>
+            
             <div className="mt-8 pt-8 border-t">
               <AdminRichEditor
                 labelComponent={<ExplainText bundle={CONTROLS_TEXTS_DICT[ITEM_CONTROLS.DESCRIPTION]}/>}
                 value={item.description}
-                onChange={(value) => this.onUpdateItemMeta({'description': value})}
+                onChange={(value) => {
+                    const currentDescription = value || '';
+                    const cleanedDescription = currentDescription.replace(metadataRegex, '');
+                    this._updateDescriptionWithMetadata({ tags: this.state.metadataTags, type: this.state.metadataType }); // Re-aplica o shortcode
+                }}
                 extra={{
                   publicBucketUrl,
                   folderName: `items/${itemId}`,
