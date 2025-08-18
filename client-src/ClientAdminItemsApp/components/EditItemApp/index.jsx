@@ -68,7 +68,7 @@ export default class EditItemApp extends React.Component {
     }
     const item = feed.item || initItem();
 
-    // MODIFICADO: Adicionamos o estado para nossos novos campos
+    // REMOVEMOS os estados de metadados. A única fonte da verdade é item.description
     this.state = {
       feed,
       onboardingResult,
@@ -78,9 +78,6 @@ export default class EditItemApp extends React.Component {
       action,
       userChangedLink: false,
       changed: false,
-      // NOVO: Estado para os campos de metadados
-      metadataType: 'geral', 
-      metadataTags: '',
     };
   }
 
@@ -144,6 +141,28 @@ export default class EditItemApp extends React.Component {
     }
   }
 
+  // NOVA FUNÇÃO: Único ponto para manipular mudanças nos campos de metadados
+  handleMetadataChange(newMeta) {
+    const currentDescription = this.state.item.description || '';
+    const cleanedDescription = currentDescription.replace(metadataRegex, '').trim();
+
+    const match = currentDescription.match(metadataRegex);
+    const currentType = match ? match[1] : 'geral';
+    const currentTags = match ? match[2] : '';
+
+    const newType = newMeta.type !== undefined ? newMeta.type : currentType;
+    const newTags = newMeta.tags !== undefined ? newMeta.tags : currentTags;
+    
+    let finalDescription = cleanedDescription;
+
+    if (newType !== 'geral' && newType) {
+      const newShortcode = `[meta type="${newType}" tags="${newTags}"]`;
+      finalDescription = `${newShortcode}\n\n${cleanedDescription}`;
+    }
+
+    this.onUpdateItemMeta({ 'description': finalDescription });
+  }
+  
   onUpdateFeed(props, onSuccess) {
     this.setState(prevState => ({
       feed: {
@@ -223,13 +242,19 @@ export default class EditItemApp extends React.Component {
   }
 
   render() {
-    // MODIFICADO: Extraímos os novos estados
-    const {submitStatus, itemId, item, action, feed, onboardingResult, changed, metadataType, metadataTags} = this.state;
+    const {submitStatus, itemId, item, action, feed, onboardingResult, changed} = this.state;
     const submitting = submitStatus === SUBMIT_STATUS__START;
     const {mediaFile} = item;
     const status = item.status || STATUSES.PUBLISHED;
     const webGlobalSettings = feed.settings.webGlobalSettings || {};
     const publicBucketUrl = webGlobalSettings.publicBucketUrl || '';
+    
+    // VALORES DERIVADOS: Extraímos os metadados da description a cada renderização
+    const description = item.description || '';
+    const match = description.match(metadataRegex);
+    const metadataType = match ? match[1] : 'geral';
+    const metadataTags = match ? match[2] : '';
+
     let buttonText = 'Create';
     let submittingButtonText = 'Creating...';
     let currentPage = NAV_ITEMS.NEW_ITEM;
@@ -365,9 +390,7 @@ export default class EditItemApp extends React.Component {
                 labelComponent={<ExplainText bundle={CONTROLS_TEXTS_DICT[ITEM_CONTROLS.DESCRIPTION]}/>}
                 value={item.description}
                 onChange={(value) => {
-                    const currentDescription = value || '';
-                    const cleanedDescription = currentDescription.replace(metadataRegex, '');
-                    this._updateDescriptionWithMetadata({ tags: this.state.metadataTags, type: this.state.metadataType }); // Re-aplica o shortcode
+                    this.onUpdateItemMeta({'description': value});
                 }}
                 extra={{
                   publicBucketUrl,
