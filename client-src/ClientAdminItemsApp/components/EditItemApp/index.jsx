@@ -30,8 +30,8 @@ import {getMediaFileFromUrl} from "../../../../common-src/MediaFileUtils";
 
 const SUBMIT_STATUS__START = 1;
 
-// NOVO: Nossa RegEx para encontrar e manipular os metadados
-const metadataRegex = /\[meta\s+type="([^"]+)"\s+tags="([^"]*)"\]\s*/s;
+// REGEX ATUALIZADO para incluir a data opcional
+const metadataRegex = /\[meta\s+type="([^"]+)"\s+tags="([^"]*)"(?:\s+date="([^"]*)")?\]\s*/s;
 
 function initItem(itemId) {
   return ({
@@ -141,7 +141,6 @@ export default class EditItemApp extends React.Component {
     }
   }
 
-  // NOVA FUNÇÃO: Único ponto para manipular mudanças nos campos de metadados
   handleMetadataChange(newMeta) {
     const currentDescription = this.state.item.description || '';
     const cleanedDescription = currentDescription.replace(metadataRegex, '').trim();
@@ -149,14 +148,17 @@ export default class EditItemApp extends React.Component {
     const match = currentDescription.match(metadataRegex);
     const currentType = match ? match[1] : 'geral';
     const currentTags = match ? match[2] : '';
+    const currentDate = match && match[3] ? match[3] : ''; // Pega a data atual
 
     const newType = newMeta.type !== undefined ? newMeta.type : currentType;
     const newTags = newMeta.tags !== undefined ? newMeta.tags : currentTags;
+    const newDate = newMeta.date !== undefined ? newMeta.date : currentDate; // Pega a nova data
     
     let finalDescription = cleanedDescription;
 
     if (newType !== 'geral' && newType) {
-      const newShortcode = `[meta type="${newType}" tags="${newTags}"]`;
+      let dateAttr = newDate ? ` date="${newDate}"` : '';
+      const newShortcode = `[meta type="${newType}" tags="${newTags}"${dateAttr}]`;
       finalDescription = `${newShortcode}\n\n${cleanedDescription}`;
     }
 
@@ -254,6 +256,7 @@ export default class EditItemApp extends React.Component {
     const match = description.match(metadataRegex);
     const metadataType = match ? match[1] : 'geral';
     const metadataTags = match ? match[2] : '';
+    const metadataDate = match && match[3] ? match[3] : ''; // Extrai a data
 
     let buttonText = 'Create';
     let submittingButtonText = 'Creating...';
@@ -358,9 +361,9 @@ export default class EditItemApp extends React.Component {
               </div>
             </div>
 
-            <div className="mt-8 pt-8 border-t">
+<div className="mt-8 pt-8 border-t">
                 <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Metadados da Aplicação</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4"> {/* MUDADO para 3 colunas */}
                     <div>
                         <label htmlFor="metadata-type" className="block text-sm font-medium text-gray-700">
                             Tipo de Conteúdo
@@ -370,20 +373,28 @@ export default class EditItemApp extends React.Component {
                             name="metadata-type"
                             className="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
                             value={metadataType}
-                            onChange={(e) => this._updateDescriptionWithMetadata({ type: e.target.value })}
+                            onChange={(e) => this.handleMetadataChange({ type: e.target.value })}
                         >
                             <option value="geral">Geral</option>
                             <option value="santo">Santo</option>
                             <option value="oracao">Oração</option>
+                            <option value="liturgia">Liturgia</option>
+                            <option value="curiosidade">Curiosidade</option>
                         </select>
                     </div>
                     <AdminInput
                         labelComponent={<label className="block text-sm font-medium text-gray-700">Tags (separadas por vírgula)</label>}
                         value={metadataTags}
-                        onChange={(e) => this._updateDescriptionWithMetadata({ tags: e.target.value })}
+                        onChange={(e) => this.handleMetadataChange({ tags: e.target.value })}
+                    />
+                    <AdminInput
+                        labelComponent={<label className="block text-sm font-medium text-gray-700">Data Comemorativa (ex: 24/06)</label>}
+                        value={metadataDate}
+                        onChange={(e) => this.handleMetadataChange({ date: e.target.value })}
                     />
                 </div>
             </div>
+
             
             <div className="mt-8 pt-8 border-t">
               <AdminRichEditor
