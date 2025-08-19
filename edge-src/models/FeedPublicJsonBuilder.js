@@ -236,28 +236,41 @@ export default class FeedPublicJsonBuilder {
 //    newItem['content_text'] = item.descriptionText || '';
 
     // ==========================================================
-    // INÍCIO DA NOSSA MODIFICAÇÃO NO SERVIDOR
+    // INÍCIO DA NOSSA MODIFICAÇÃO AVANÇADA NO SERVIDOR
     // ==========================================================
-    const metadataRegex = /\[meta\s+type="([^"]+)"\s+tags="([^"]*)"\]/s;
+    const metadataRegex = /\[meta\s+type="([^"]+)"\s+tags="([^"]*)"(?:\s+date="([^"]*)")?\]\s*/s;
+    const langRegex = /\[(PT|EN|ES|LA)\](.*?)\[\/\1\]/gs;
     const rawHtml = item.description || '';
-    const match = rawHtml.match(metadataRegex);
-    let cleanedHtml = rawHtml;
+    
+    // 1. Extrai Metadados (Tipo, Tags, Data)
+    const metaMatch = rawHtml.match(metadataRegex);
+    _microfeed.metadata = { type: 'geral', tags: [], date: null };
+    let contentAfterMeta = rawHtml;
 
-    // Adicionamos um objeto 'metadata' ao nosso objeto '_microfeed'
-    _microfeed.metadata = { type: 'geral', tags: [] };
-
-    if (match) {
-        // Se encontramos o shortcode, preenchemos os metadados
-        _microfeed.metadata.type = match[1];
-        _microfeed.metadata.tags = match[2] ? match[2].split(',') : [];
-        
-        // Removemos o shortcode do HTML que será exibido
-        cleanedHtml = rawHtml.replace(metadataRegex, '').trim();
+    if (metaMatch) {
+        _microfeed.metadata.type = metaMatch[1];
+        _microfeed.metadata.tags = metaMatch[2] ? metaMatch[2].split(',').map(t => t.trim()) : [];
+        _microfeed.metadata.date = metaMatch[3] || null; // Captura a data
+        contentAfterMeta = rawHtml.replace(metadataRegex, '').trim();
     }
 
-    // Usamos o HTML limpo para o conteúdo visível e o texto puro
-    newItem['content_html'] = cleanedHtml;
-    newItem['content_text'] = htmlToPlainText(cleanedHtml); // Recalculamos o texto puro a partir do HTML limpo
+    // 2. Extrai Conteúdo por Idioma
+    newItem.content_html = {};
+    newItem.content_text = {};
+    let langMatches = [...contentAfterMeta.matchAll(langRegex)];
+
+    if (langMatches.length > 0) {
+        langMatches.forEach(match => {
+            const lang = match[1].toLowerCase();
+            const html = match[2].trim();
+            newItem.content_html[lang] = html;
+            newItem.content_text[lang] = htmlToPlainText(html);
+        });
+    } else {
+        // Fallback: se não houver tags de idioma, usa o conteúdo inteiro para Português
+        newItem.content_html['pt'] = contentAfterMeta;
+        newItem.content_text['pt'] = htmlToPlainText(contentAfterMeta);
+    }
     // ==========================================================
     // FIM DA NOSSA MODIFICAÇÃO
     // ==========================================================
