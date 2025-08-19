@@ -56,6 +56,8 @@ export default class EditItemApp extends React.Component {
     // NOVO: Bind da nossa nova função
     this._updateDescriptionWithMetadata = this._updateDescriptionWithMetadata.bind(this);
 
+    this.handleMetadataChange = this.handleMetadataChange.bind(this);
+
     const $feedContent = document.getElementById('feed-content');
     const $dataParams = document.getElementById('lh-data-params');
     const onboardingResult = JSON.parse(unescapeHtml(document.getElementById('onboarding-result').innerHTML));
