@@ -208,14 +208,24 @@ export default class FeedPublicJsonBuilder {
     };
 
     // ==========================================================
-    // --- CORREÇÃO APLICADA AQUI ---
-    // A lógica do slug foi movida para DEPOIS da criação do objeto _microfeed
+    // --- FUNÇÃO SLUGIFY CORRIGIDA ---
+    // Esta versão substitui caracteres acentuados pelos seus equivalentes.
     // ==========================================================
-    const slugify = (text) => text.toString().toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^\w\-]+/g, '')
-        .replace(/\-\-+/g, '-')
-        .replace(/^-+/, '').replace(/-+$/, '');
+    const slugify = (text) => {
+      const from = "ãàáäâẽèéëêìíïîõòóöôùúüûñç·/_,:;";
+      const to = "aaaaaeeeeeiiiiooooouuuunc------";
+      let newText = text.toString().toLowerCase().replace(/\s+/g, '-'); // Troca espaços por hífens
+
+      for (let i = 0, l = from.length; i < l; i++) {
+        newText = newText.replace(new RegExp(from.charAt(i), 'g'), to.charAt(i));
+      }
+
+      return newText
+        .replace(/[^\w\-]+/g, '') // Remove todos os caracteres que não são palavras ou hífens
+        .replace(/\-\-+/g, '-')   // Substitui múltiplos hífens por um único
+        .replace(/^-+/, '')      // Remove hífens do início
+        .replace(/-+$/, '');     // Remove hífens do fim
+    };
 
     _microfeed.slug = slugify(item.title);
     // ==========================================================
