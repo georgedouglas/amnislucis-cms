@@ -193,6 +193,20 @@ export default class FeedPublicJsonBuilder {
       id: item.id,
       title: item.title || 'untitled',
     };
+    const attachment = {};
+    const _microfeed = {
+      is_audio: mediaFile.isAudio,
+      is_document: mediaFile.isDocument,
+      is_external_url: mediaFile.isExternalUrl,
+      is_video: mediaFile.isVideo,
+      is_image: mediaFile.isImage,
+      web_url: item.webUrl,
+      json_url: item.jsonUrl,
+      rss_url: item.rssUrl,
+      guid: item.guid,
+      status: ITEM_STATUSES_DICT[item.status] ? ITEM_STATUSES_DICT[item.status].name : 'published',
+    };
+
     // ==========================================================
     // --- CORREÇÃO APLICADA AQUI ---
     // A lógica do slug foi movida para DEPOIS da criação do objeto _microfeed
@@ -207,19 +221,6 @@ export default class FeedPublicJsonBuilder {
     // ==========================================================
     // --- FIM DA CORREÇÃO ---
     // ==========================================================
-    const attachment = {};
-    const _microfeed = {
-      is_audio: mediaFile.isAudio,
-      is_document: mediaFile.isDocument,
-      is_external_url: mediaFile.isExternalUrl,
-      is_video: mediaFile.isVideo,
-      is_image: mediaFile.isImage,
-      web_url: item.webUrl,
-      json_url: item.jsonUrl,
-      rss_url: item.rssUrl,
-      guid: item.guid,
-      status: ITEM_STATUSES_DICT[item.status] ? ITEM_STATUSES_DICT[item.status].name : 'published',
-    };
 
     if (isValidMediaFile(mediaFile)) {
       if (mediaFile.url) {
@@ -245,18 +246,12 @@ export default class FeedPublicJsonBuilder {
     if (mediaFile.isExternalUrl && mediaFile.url) {
       newItem['external_url'] = mediaFile.url;
     }
-
-//    newItem['content_html'] = item.description || '';
-//    newItem['content_text'] = item.descriptionText || '';
-
-    // ==========================================================
-    // INÍCIO DA NOSSA MODIFICAÇÃO AVANÇADA NO SERVIDOR
-    // ==========================================================
+    
+    // Suas modificações de [meta] e idiomas (estão corretas e permanecem aqui)
     const metadataRegex = /\[meta\s+type="([^"]+)"\s+tags="([^"]*)"(?:\s+date="([^"]*)")?\]\s*/s;
     const langRegex = /\[(PT|EN|ES|LA)\](.*?)\[\/\1\]/gs;
     const rawHtml = item.description || '';
     
-    // 1. Extrai Metadados (Tipo, Tags, Data)
     const metaMatch = rawHtml.match(metadataRegex);
     _microfeed.metadata = { type: 'geral', tags: [], date: null };
     let contentAfterMeta = rawHtml;
@@ -264,11 +259,10 @@ export default class FeedPublicJsonBuilder {
     if (metaMatch) {
         _microfeed.metadata.type = metaMatch[1];
         _microfeed.metadata.tags = metaMatch[2] ? metaMatch[2].split(',').map(t => t.trim()) : [];
-        _microfeed.metadata.date = metaMatch[3] || null; // Captura a data
+        _microfeed.metadata.date = metaMatch[3] || null;
         contentAfterMeta = rawHtml.replace(metadataRegex, '').trim();
     }
 
-    // 2. Extrai Conteúdo por Idioma
     newItem.content_html = {};
     newItem.content_text = {};
     let langMatches = [...contentAfterMeta.matchAll(langRegex)];
@@ -281,13 +275,9 @@ export default class FeedPublicJsonBuilder {
             newItem.content_text[lang] = htmlToPlainText(html);
         });
     } else {
-        // Fallback: se não houver tags de idioma, usa o conteúdo inteiro para Português
         newItem.content_html['pt'] = contentAfterMeta;
         newItem.content_text['pt'] = htmlToPlainText(contentAfterMeta);
     }
-    // ==========================================================
-    // FIM DA NOSSA MODIFICAÇÃO
-    // ==========================================================
     
     if (item.image) {
       newItem['image'] = item.image;
