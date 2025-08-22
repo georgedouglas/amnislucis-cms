@@ -343,6 +343,55 @@ async getJsonData() {
     const {items} = this.content;
     const existingitems = items || [];
     publicContent['items'] = [];
+
+   // --- INÍCIO DA CORREÇÃO: A definição da função foi colocada de volta ---
+    const formatLiturgyData = (liturgyData) => {
+        let contentHtml = `<h1>${liturgyData.liturgia}</h1>`;
+        contentHtml += `<p style="text-transform: capitalize; font-weight: bold;">Cor Litúrgica: ${liturgyData.cor}</p>`;
+        const { leituras } = liturgyData;
+        const renderLeituraArray = (leituraArray, tituloDefault) => {
+            let html = '';
+            if (leituraArray && leituraArray.length > 0) {
+                leituraArray.forEach(leitura => {
+                    html += `<div><h3>${leitura.titulo || tituloDefault} (${leitura.referencia})</h3>`;
+                    if (leitura.refrao) html += `<blockquote style="font-style: italic;"><strong>R.</strong> ${leitura.refrao}</blockquote>`;
+                    html += `<p>${leitura.texto.replace(/\n/g, '<br>')}</p></div>`;
+                });
+            }
+            return html;
+        };
+        if (Object.keys(leituras).length > 0) {
+            contentHtml += `<h2>Leituras</h2>`;
+            contentHtml += renderLeituraArray(leituras.primeiraLeitura, 'Primeira Leitura');
+            contentHtml += renderLeituraArray(leituras.salmo, 'Salmo Responsorial');
+            contentHtml += renderLeituraArray(leituras.segundaLeitura, 'Segunda Leitura');
+            contentHtml += renderLeituraArray(leituras.evangelho, 'Evangelho');
+            if (leituras.extras) {
+                leituras.extras.forEach(extra => { contentHtml += renderLeituraArray([extra], extra.tipo || 'Extra'); });
+            }
+        }
+        const { oracoes } = liturgyData;
+        if (Object.keys(oracoes).length > 0) {
+            contentHtml += `<h2>Orações</h2>`;
+            if(oracoes.coleta) contentHtml += `<h3>Coleta</h3><p>${oracoes.coleta.replace(/\n/g, '<br>')}</p>`;
+            if(oracoes.oferendas) contentHtml += `<h3>Sobre as Oferendas</h3><p>${oracoes.oferendas.replace(/\n/g, '<br>')}</p>`;
+            if(oracoes.comunhao) contentHtml += `<h3>Antífona da Comunhão</h3><p>${oracoes.comunhao.replace(/\n/g, '<br>')}</p>`;
+            if (oracoes.extras && oracoes.extras.length > 0) {
+                oracoes.extras.forEach(extra => { contentHtml += `<h3>${extra.titulo}</h3><p>${extra.texto.replace(/\n/g, '<br>')}</p>`; });
+            }
+        }
+        return {
+            id: `liturgia-${liturgyData.data.replace(/\//g, '-')}`,
+            title: `Liturgia Diária: ${liturgyData.data}`,
+            url: '#liturgia',
+            date_published: new Date().toISOString(),
+            content_html: { pt: contentHtml },
+            content_text: { pt: htmlToPlainText(contentHtml) },
+            _microfeed: { metadata: { type: "liturgia", tags: [liturgyData.cor.toLowerCase()], color: liturgyData.cor, date: liturgyData.data } }
+        };
+    };
+    // --- FIM DA CORREÇÃO ---
+  
     const requestedType = this.request.query.type || null; // ex: 'oracao', 'curiosidade'
       // ==========================================================
     // INÍCIO DA ADIÇÃO: BUSCAR E INSERIR A LITURGIA DIÁRIA
