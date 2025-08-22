@@ -334,17 +334,17 @@ export default class FeedPublicJsonBuilder {
     return newItem;
   }
 
+// ==========================================================
+// SUBSTITUA SUA FUNÇÃO getJsonData INTEIRA POR ESTA VERSÃO FINAL
+// ==========================================================
 async getJsonData() {
     const publicContent = {
       version: 'https://jsonfeed.org/version/1.1',
       ...this._buildPublicContentChannel(this.content),
     };
-
-    const {items} = this.content;
-    const existingitems = items || [];
     publicContent['items'] = [];
 
-   // --- INÍCIO DA CORREÇÃO: A definição da função foi colocada de volta ---
+    // Definindo a função auxiliar APENAS UMA VEZ.
     const formatLiturgyData = (liturgyData) => {
         let contentHtml = `<h1>${liturgyData.liturgia}</h1>`;
         contentHtml += `<p style="text-transform: capitalize; font-weight: bold;">Cor Litúrgica: ${liturgyData.cor}</p>`;
@@ -390,76 +390,10 @@ async getJsonData() {
             _microfeed: { metadata: { type: "liturgia", tags: [liturgyData.cor.toLowerCase()], color: liturgyData.cor, date: liturgyData.data } }
         };
     };
-    // --- FIM DA CORREÇÃO ---
-  
-    const requestedType = this.request.query.type || null; // ex: 'oracao', 'curiosidade'
-      // ==========================================================
-    // INÍCIO DA ADIÇÃO: BUSCAR E INSERIR A LITURGIA DIÁRIA
-    // ==========================================================
-    
-    const formatLiturgyData = (liturgyData) => {
-        let contentHtml = `<h1>${liturgyData.liturgia}</h1>`;
-        contentHtml += `<p style="text-transform: capitalize; font-weight: bold;">Cor Litúrgica: ${liturgyData.cor}</p>`;
 
-        const { leituras } = liturgyData;
-        const renderLeituraArray = (leituraArray, tituloDefault) => {
-            let html = '';
-            if (leituraArray && leituraArray.length > 0) {
-                leituraArray.forEach(leitura => {
-                    html += `<div>`;
-                    html += `<h3>${leitura.titulo || tituloDefault} (${leitura.referencia})</h3>`;
-                    if (leitura.refrao) html += `<blockquote style="font-style: italic;"><strong>R.</strong> ${leitura.refrao}</blockquote>`;
-                    html += `<p>${leitura.texto.replace(/\n/g, '<br>')}</p>`;
-                    html += `</div>`;
-                });
-            }
-            return html;
-        };
-        
-        if (Object.keys(leituras).length > 0) {
-            contentHtml += `<h2>Leituras</h2>`;
-            contentHtml += renderLeituraArray(leituras.primeiraLeitura, 'Primeira Leitura');
-            contentHtml += renderLeituraArray(leituras.salmo, 'Salmo Responsorial');
-            contentHtml += renderLeituraArray(leituras.segundaLeitura, 'Segunda Leitura');
-            contentHtml += renderLeituraArray(leituras.evangelho, 'Evangelho');
-            if (leituras.extras) {
-                leituras.extras.forEach(extra => {
-                    contentHtml += renderLeituraArray([extra], extra.tipo || 'Extra');
-                });
-            }
-        }
-        
-        const { oracoes } = liturgyData;
-        if (Object.keys(oracoes).length > 0) {
-            contentHtml += `<h2>Orações</h2>`;
-            if(oracoes.coleta) contentHtml += `<h3>Coleta</h3><p>${oracoes.coleta.replace(/\n/g, '<br>')}</p>`;
-            if(oracoes.oferendas) contentHtml += `<h3>Sobre as Oferendas</h3><p>${oracoes.oferendas.replace(/\n/g, '<br>')}</p>`;
-            if(oracoes.comunhao) contentHtml += `<h3>Antífona da Comunhão</h3><p>${oracoes.comunhao.replace(/\n/g, '<br>')}</p>`;
-            if (oracoes.extras && oracoes.extras.length > 0) {
-                oracoes.extras.forEach(extra => {
-                     contentHtml += `<h3>${extra.titulo}</h3><p>${extra.texto.replace(/\n/g, '<br>')}</p>`;
-                });
-            }
-        }
+    const requestedType = this.request.query.type || null;
 
-        return {
-            id: `liturgia-${liturgyData.data.replace(/\//g, '-')}`,
-            title: `Liturgia Diária: ${liturgyData.data}`,
-            url: '#liturgia',
-            date_published: new Date().toISOString(),
-            content_html: { pt: contentHtml },
-            content_text: { pt: htmlToPlainText(contentHtml) },
-            _microfeed: {
-                metadata: {
-                    type: "liturgia",
-                    tags: [liturgyData.cor.toLowerCase()],
-                    color: liturgyData.cor,
-                    date: liturgyData.data
-                }
-            }
-        };
-    };
-
+    // Busca a liturgia apenas na carga inicial (sem tipo especificado)
     if (!requestedType) {
         try {
             const response = await fetch('https://liturgia.up.railway.app/v2/');
@@ -472,9 +406,10 @@ async getJsonData() {
             console.error("Falha ao buscar a liturgia diária:", error);
         }
     }
-    // ==========================================================
-    // FIM DA ADIÇÃO
-    // ==========================================================
+
+    const {items} = this.content;
+    const existingitems = items || [];
+
     existingitems.forEach((item) => {
       if (![STATUSES.PUBLISHED, STATUSES.UNLISTED].includes(item.status)) {
         return;
@@ -482,33 +417,22 @@ async getJsonData() {
       this._decorateForItem(item, this.baseUrl);
       const mediaFile = item.mediaFile || {};
       const newItem = this._buildPublicContentItem(item, mediaFile);
-      //publicContent.items.push(newItem);]
-      // --- INÍCIO DA ADIÇÃO: Lógica de filtragem ---
-      const itemType = newItem._microfeed.metadata.type;
       
+      const itemType = newItem._microfeed.metadata.type;
+
+      // Lógica de filtragem para carregamento sob demanda
       if (requestedType) {
-          // Se um tipo foi pedido (ex: /json?type=oracao), adicione apenas itens daquele tipo.
           if (itemType === requestedType) {
               publicContent.items.push(newItem);
           }
       } else {
-          // Se nenhum tipo foi pedido (carga inicial), adicione apenas os santos.
           if (itemType === 'santo') {
               publicContent.items.push(newItem);
           }
       }
-      // --- FIM DA ADIÇÃO ---
-    })
-
-    // Note: We don't proactively sort items based on itunes:type.
-    //       Instead, we rely on ?sort= query param and settings
-    // if (channel['itunes:type'] === 'episodic') {
-    //   publicContent.items.sort((a, b) => b['_microfeed']['date_published_ms'] - a['_microfeed']['date_published_ms']);
-    // } else {
-    //   publicContent.items.sort((a, b) => a['_microfeed']['date_published_ms'] - b['_microfeed']['date_published_ms']);
-    // }
+    });
 
     publicContent['_microfeed'] = this._buildPublicContentMicrofeedExtra(publicContent);
     return publicContent;
-  }
+}
 }
