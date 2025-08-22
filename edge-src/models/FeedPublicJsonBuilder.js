@@ -343,6 +343,7 @@ async getJsonData() {
     const {items} = this.content;
     const existingitems = items || [];
     publicContent['items'] = [];
+    const requestedType = this.request.query.type || null; // ex: 'oracao', 'curiosidade'
       // ==========================================================
     // INÍCIO DA ADIÇÃO: BUSCAR E INSERIR A LITURGIA DIÁRIA
     // ==========================================================
@@ -410,15 +411,17 @@ async getJsonData() {
         };
     };
 
-    try {
-        const response = await fetch('https://liturgia.up.railway.app/v2/');
-        if (response.ok) {
-            const liturgyApiData = await response.json();
-            const liturgyItem = formatLiturgyData(liturgyApiData);
-            publicContent.items.push(liturgyItem);
+    if (!requestedType) {
+        try {
+            const response = await fetch('https://liturgia.up.railway.app/v2/');
+            if (response.ok) {
+                const liturgyApiData = await response.json();
+                const liturgyItem = formatLiturgyData(liturgyApiData);
+                publicContent.items.push(liturgyItem);
+            }
+        } catch (error) {
+            console.error("Falha ao buscar a liturgia diária:", error);
         }
-    } catch (error) {
-        console.error("Falha ao buscar a liturgia diária:", error);
     }
     // ==========================================================
     // FIM DA ADIÇÃO
@@ -430,7 +433,22 @@ async getJsonData() {
       this._decorateForItem(item, this.baseUrl);
       const mediaFile = item.mediaFile || {};
       const newItem = this._buildPublicContentItem(item, mediaFile);
-      publicContent.items.push(newItem);
+      //publicContent.items.push(newItem);]
+      // --- INÍCIO DA ADIÇÃO: Lógica de filtragem ---
+      const itemType = newItem._microfeed.metadata.type;
+      
+      if (requestedType) {
+          // Se um tipo foi pedido (ex: /json?type=oracao), adicione apenas itens daquele tipo.
+          if (itemType === requestedType) {
+              publicContent.items.push(newItem);
+          }
+      } else {
+          // Se nenhum tipo foi pedido (carga inicial), adicione apenas os santos.
+          if (itemType === 'santo') {
+              publicContent.items.push(newItem);
+          }
+      }
+      // --- FIM DA ADIÇÃO ---
     })
 
     // Note: We don't proactively sort items based on itunes:type.
