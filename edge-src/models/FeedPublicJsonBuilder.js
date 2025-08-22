@@ -193,6 +193,15 @@ export default class FeedPublicJsonBuilder {
       id: item.id,
       title: item.title || 'untitled',
     };
+    // --- ADICIONE ESTA PARTE ---
+    const slugify = (text) => text.toString().toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w\-]+/g, '')
+        .replace(/\-\-+/g, '-')
+        .replace(/^-+/, '').replace(/-+$/, '');
+    
+    _microfeed.slug = slugify(item.title);
+    // --- FIM DA ADIÇÃO ---
     const attachment = {};
     const _microfeed = {
       is_audio: mediaFile.isAudio,
