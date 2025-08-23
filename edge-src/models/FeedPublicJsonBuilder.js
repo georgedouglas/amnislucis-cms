@@ -23,7 +23,7 @@ export default class FeedPublicJsonBuilder {
   }
 
   _decorateForItem(item, baseUrl) {
-    item.webUrl = PUBLIC_URLS.webItem(item.id, item.title, baseUrl);
+    item.webUrl = PUBLIC_URLS.webItem(item.id, item.title.pt || '', baseUrl);
     item.jsonUrl = PUBLIC_URLS.jsonItem(item.id, null, baseUrl);
     item.rssUrl = PUBLIC_URLS.rssItem(item.id, null, baseUrl);
 
@@ -183,8 +183,6 @@ export default class FeedPublicJsonBuilder {
     return microfeedExtra;
   }
 
-// SUBSTITUA A FUNÇÃO _buildPublicContentItem INTEIRA POR ESTA VERSÃO:
-
 _buildPublicContentItem(item, mediaFile) {
     let trackingUrls = [];
     if (this.settings.analytics && this.settings.analytics.urls) {
@@ -192,7 +190,7 @@ _buildPublicContentItem(item, mediaFile) {
     }
 
     // ==========================================================
-    // --- INÍCIO DA MODIFICAÇÃO: PROCESSAMENTO DO TÍTULO ---
+    // --- PROCESSAMENTO DO TÍTULO ---
     // ==========================================================
     const rawTitle = item.title || 'untitled';
     const langRegex = /\[(PT|EN|ES|LA)\](.*?)\[\/\1\]/gs;
@@ -213,8 +211,7 @@ _buildPublicContentItem(item, mediaFile) {
 
     const newItem = {
       id: item.id,
-      // O título do item agora é o objeto que acabamos de criar.
-      title: parsedTitle,
+      title: item.title, // item.title já é o objeto { pt: "...", en: "..." }
     };
     // ==========================================================
     // --- FIM DA MODIFICAÇÃO: PROCESSAMENTO DO TÍTULO ---
@@ -244,8 +241,8 @@ _buildPublicContentItem(item, mediaFile) {
       return newText.replace(/[^\w\-]+/g, '').replace(/\-\-+/g, '-').replace(/^-+/, '').replace(/-+$/, '');
     };
 
-    // Gera o slug a partir do título em português para consistência.
-    _microfeed.slug = slugify(parsedTitle.pt || rawTitle);
+    // O slug agora é gerado a partir de item.title.pt
+    _microfeed.slug = slugify(item.title.pt || '');
 
     if (isValidMediaFile(mediaFile)) {
         // ... (o restante do código desta seção permanece o mesmo)
@@ -317,9 +314,6 @@ _buildPublicContentItem(item, mediaFile) {
     newItem['_microfeed'] = _microfeed;
     return newItem;
 }
-
-// Onde: edge-src/models/FeedPublicJsonBuilder.js
-// SUBSTITUA A FUNÇÃO getJsonData() INTEIRA PELA VERSÃO ABAIXO:
 
 async getJsonData() {
     const publicContent = {
@@ -424,20 +418,18 @@ async getJsonData() {
                 return itemType === 'santo';
             });
         } else {
-            // NOVO BLOCO: Lida com o caso de ser uma página de item único.
-            // Neste cenário, o Microfeed já nos deu o item correto.
-            // Apenas o passamos adiante para ser processado, sem adicionar a liturgia.
             itemsToProcess = allDatabaseItems || [];
         }
-        // ==========================================================
-        // --- FIM DA CORREÇÃO CRÍTICA ---
-        // ==========================================================
+
     }
 
-    // Processa a lista de itens que foi corretamente filtrada
-    itemsToProcess.forEach((item) => {
+    // Agora, o loop principal usa a lista de itens JÁ processados.
+    processedItems.forEach((item) => {
       if (![STATUSES.PUBLISHED, STATUSES.UNLISTED].includes(item.status)) return;
+      
+      // Agora, _decorateForItem receberá o item com o título já como objeto.
       this._decorateForItem(item, this.baseUrl);
+      
       const mediaFile = item.mediaFile || {};
       const newItem = this._buildPublicContentItem(item, mediaFile);
       publicContent.items.push(newItem);
