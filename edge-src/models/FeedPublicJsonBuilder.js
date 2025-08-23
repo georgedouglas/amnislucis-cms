@@ -330,6 +330,26 @@ export default class FeedPublicJsonBuilder {
       _microfeed['date_published_ms'] = item.pubDateMs;
     }
 
+    const hydrationData = {
+        title: {
+            pt: item.title_pt || item.title || '',
+            en: item.title_en || '',
+            es: item.title_es || '',
+            la: item.title_la || ''
+        },
+        content_html: {
+            pt: newItem.content_html.pt || '',
+            en: newItem.content_html.en || '',
+            es: newItem.content_html.es || '',
+            la: newItem.content_html.la || ''
+        }
+    };
+
+    // Transformamos o objeto em uma string JSON segura aqui no backend.
+    // Isso resolve TODOS os problemas de formatação no template.
+    _microfeed.hydration_json_string = JSON.stringify(hydrationData);
+    // --- FIM DA CORREÇÃO DEFINITIVA --
+
     newItem['_microfeed'] = _microfeed;
     return newItem;
   }
