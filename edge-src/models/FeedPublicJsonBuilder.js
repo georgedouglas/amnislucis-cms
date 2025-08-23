@@ -1,4 +1,4 @@
-import {
+ import {
   urlJoinWithRelative,
   buildAudioUrlWithTracking,
   PUBLIC_URLS,
@@ -343,18 +343,15 @@ async getJsonData() {
       ...this._buildPublicContentChannel(this.content),
     };
 
-    // ==========================================================
-    // --- INÍCIO DA CORREÇÃO DEFINITIVA ---
-    // Esta é a maneira correta de ler parâmetros de URL em um ambiente Cloudflare.
     const url = new URL(this.request.url);
     const requestedType = url.searchParams.get('type');
-    // --- FIM DA CORREÇÃO DEFINITIVA ---
+    
     const { items: allDatabaseItems } = this.content;
     
     publicContent['items'] = [];
     let itemsToProcess = [];
 
-    // A lógica if/else abaixo estava correta o tempo todo e agora funcionará.
+    // CASO 1: A requisição é para um tipo específico (lazy loading)
     if (requestedType) {
         itemsToProcess = (allDatabaseItems || []).filter(item => {
             const metadataRegex = /\[meta\s+type="([^"]+)"/s;
@@ -362,78 +359,98 @@ async getJsonData() {
             const itemType = metaMatch ? metaMatch[1] : null;
             return itemType === requestedType;
         });
+    
+    // CASO 2: A requisição NÃO tem um tipo específico. Pode ser a carga inicial ou uma página de item.
     } else {
-        // Bloco da carga inicial (busca liturgia, filtra santos)
-        const formatLiturgyData = (liturgyData) => {
-            // ... (toda a sua função formatLiturgyData aqui, sem alterações)
-            let contentHtml = `<h1>${liturgyData.liturgia}</h1>`;
-            contentHtml += `<p style="text-transform: capitalize; font-weight: bold;">Cor Litúrgica: ${liturgyData.cor}</p>`;
-            const { leituras } = liturgyData;
-            const renderLeituraArray = (leituraArray, tituloDefault) => {
-                let html = '';
-                if (leituraArray && leituraArray.length > 0) {
-                    leituraArray.forEach(leitura => {
-                        html += `<div>`;
-                        html += `<h3>${leitura.titulo || tituloDefault} (${leitura.referencia})</h3>`;
-                        if (leitura.refrao) html += `<blockquote style="font-style: italic;"><strong>R.</strong> ${leitura.refrao}</blockquote>`;
-                        html += `<p>${leitura.texto.replace(/\n/g, '<br>')}</p>`;
-                        html += `</div>`;
-                    });
+        // ==========================================================
+        // --- INÍCIO DA CORREÇÃO CRÍTICA ---
+        // A condição agora verifica DUAS coisas:
+        // 1. Se NÃO foi pedido um tipo específico (já sabemos disso)
+        // 2. E se NÃO é uma página de item único (usando a flag this.forOneItem).
+        // A liturgia só será buscada se AMBAS as condições forem verdadeiras.
+        // ==========================================================
+        if (!this.forOneItem) {
+            // Este bloco agora só executa na carga inicial da página principal.
+            const formatLiturgyData = (liturgyData) => {
+                // (O código completo da sua função formatLiturgyData está aqui)
+                let contentHtml = `<h1>${liturgyData.liturgia}</h1>`;
+                contentHtml += `<p style="text-transform: capitalize; font-weight: bold;">Cor Litúrgica: ${liturgyData.cor}</p>`;
+                const { leituras } = liturgyData;
+                const renderLeituraArray = (leituraArray, tituloDefault) => {
+                    let html = '';
+                    if (leituraArray && leituraArray.length > 0) {
+                        leituraArray.forEach(leitura => {
+                            html += `<div>`;
+                            html += `<h3>${leitura.titulo || tituloDefault} (${leitura.referencia})</h3>`;
+                            if (leitura.refrao) html += `<blockquote style="font-style: italic;"><strong>R.</strong> ${leitura.refrao}</blockquote>`;
+                            html += `<p>${leitura.texto.replace(/\n/g, '<br>')}</p>`;
+                            html += `</div>`;
+                        });
+                    }
+                    return html;
+                };
+                if (Object.keys(leituras).length > 0) {
+                    contentHtml += `<h2>Leituras</h2>`;
+                    contentHtml += renderLeituraArray(leituras.primeiraLeitura, 'Primeira Leitura');
+                    contentHtml += renderLeituraArray(leituras.salmo, 'Salmo Responsorial');
+                    contentHtml += renderLeituraArray(leituras.segundaLeitura, 'Segunda Leitura');
+                    contentHtml += renderLeituraArray(leituras.evangelho, 'Evangelho');
+                    if (leituras.extras) {
+                        leituras.extras.forEach(extra => {
+                            contentHtml += renderLeituraArray([extra], extra.tipo || 'Extra');
+                        });
+                    }
                 }
-                return html;
+                const { oracoes } = liturgyData;
+                if (Object.keys(oracoes).length > 0) {
+                    contentHtml += `<h2>Orações</h2>`;
+                    if(oracoes.coleta) contentHtml += `<h3>Coleta</h3><p>${oracoes.coleta.replace(/\n/g, '<br>')}</p>`;
+                    if(oracoes.oferendas) contentHtml += `<h3>Sobre as Oferendas</h3><p>${oracoes.oferendas.replace(/\n/g, '<br>')}</p>`;
+                    if(oracoes.comunhao) contentHtml += `<h3>Antífona da Comunhão</h3><p>${oracoes.comunhao.replace(/\n/g, '<br>')}</p>`;
+                    if (oracoes.extras && oracoes.extras.length > 0) {
+                        oracoes.extras.forEach(extra => {
+                             contentHtml += `<h3>${extra.titulo}</h3><p>${extra.texto.replace(/\n/g, '<br>')}</p>`;
+                        });
+                    }
+                }
+                return {
+                    id: `liturgia-${liturgyData.data.replace(/\//g, '-')}`,
+                    title: `Liturgia Diária: ${liturgyData.data}`,
+                    url: '#liturgia',
+                    date_published: new Date().toISOString(),
+                    content_html: { pt: contentHtml },
+                    content_text: { pt: htmlToPlainText(contentHtml) },
+                    _microfeed: { metadata: { type: "liturgia", tags: [liturgyData.cor.toLowerCase()], color: liturgyData.cor, date: liturgyData.data } }
+                };
             };
-            if (Object.keys(leituras).length > 0) {
-                contentHtml += `<h2>Leituras</h2>`;
-                contentHtml += renderLeituraArray(leituras.primeiraLeitura, 'Primeira Leitura');
-                contentHtml += renderLeituraArray(leituras.salmo, 'Salmo Responsorial');
-                contentHtml += renderLeituraArray(leituras.segundaLeitura, 'Segunda Leitura');
-                contentHtml += renderLeituraArray(leituras.evangelho, 'Evangelho');
-                if (leituras.extras) {
-                    leituras.extras.forEach(extra => {
-                        contentHtml += renderLeituraArray([extra], extra.tipo || 'Extra');
-                    });
-                }
-            }
-            const { oracoes } = liturgyData;
-            if (Object.keys(oracoes).length > 0) {
-                contentHtml += `<h2>Orações</h2>`;
-                if(oracoes.coleta) contentHtml += `<h3>Coleta</h3><p>${oracoes.coleta.replace(/\n/g, '<br>')}</p>`;
-                if(oracoes.oferendas) contentHtml += `<h3>Sobre as Oferendas</h3><p>${oracoes.oferendas.replace(/\n/g, '<br>')}</p>`;
-                if(oracoes.comunhao) contentHtml += `<h3>Antífona da Comunhão</h3><p>${oracoes.comunhao.replace(/\n/g, '<br>')}</p>`;
-                if (oracoes.extras && oracoes.extras.length > 0) {
-                    oracoes.extras.forEach(extra => {
-                         contentHtml += `<h3>${extra.titulo}</h3><p>${extra.texto.replace(/\n/g, '<br>')}</p>`;
-                    });
-                }
-            }
-            return {
-                id: `liturgia-${liturgyData.data.replace(/\//g, '-')}`,
-                title: `Liturgia Diária: ${liturgyData.data}`,
-                url: '#liturgia',
-                date_published: new Date().toISOString(),
-                content_html: { pt: contentHtml },
-                content_text: { pt: htmlToPlainText(contentHtml) },
-                _microfeed: { metadata: { type: "liturgia", tags: [liturgyData.cor.toLowerCase()], color: liturgyData.cor, date: liturgyData.data } }
-            };
-        };
 
-        try {
-            const response = await fetch('https://liturgia.up.railway.app/v2/');
-            if (response.ok) {
-                const liturgyApiData = await response.json();
-                const liturgyItem = formatLiturgyData(liturgyApiData);
-                publicContent.items.push(liturgyItem);
-            }
-        } catch (error) { console.error("Falha ao buscar a liturgia diária:", error); }
-        itemsToProcess = (allDatabaseItems || []).filter(item => {
-            const metadataRegex = /\[meta\s+type="([^"]+)"/s;
-            const metaMatch = (item.description || '').match(metadataRegex);
-            const itemType = metaMatch ? metaMatch[1] : null;
-            return itemType === 'santo';
-        });
+            try {
+                const response = await fetch('https://liturgia.up.railway.app/v2/');
+                if (response.ok) {
+                    const liturgyApiData = await response.json();
+                    const liturgyItem = formatLiturgyData(liturgyApiData);
+                    publicContent.items.push(liturgyItem);
+                }
+            } catch (error) { console.error("Falha ao buscar a liturgia diária:", error); }
+            
+            itemsToProcess = (allDatabaseItems || []).filter(item => {
+                const metadataRegex = /\[meta\s+type="([^"]+)"/s;
+                const metaMatch = (item.description || '').match(metadataRegex);
+                const itemType = metaMatch ? metaMatch[1] : null;
+                return itemType === 'santo';
+            });
+        } else {
+            // NOVO BLOCO: Lida com o caso de ser uma página de item único.
+            // Neste cenário, o Microfeed já nos deu o item correto.
+            // Apenas o passamos adiante para ser processado, sem adicionar a liturgia.
+            itemsToProcess = allDatabaseItems || [];
+        }
+        // ==========================================================
+        // --- FIM DA CORREÇÃO CRÍTICA ---
+        // ==========================================================
     }
 
-    // Processa os itens corretamente filtrados
+    // Processa a lista de itens que foi corretamente filtrada
     itemsToProcess.forEach((item) => {
       if (![STATUSES.PUBLISHED, STATUSES.UNLISTED].includes(item.status)) return;
       this._decorateForItem(item, this.baseUrl);
