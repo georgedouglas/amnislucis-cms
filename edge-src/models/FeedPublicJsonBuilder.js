@@ -334,6 +334,8 @@ export default class FeedPublicJsonBuilder {
     return newItem;
   }
 
+// SUBSTITUA A FUNÇÃO getJsonData() INTEIRA PELA VERSÃO FINAL DE DIAGNÓSTICO ABAIXO:
+
 async getJsonData() {
     const publicContent = {
       version: 'https://jsonfeed.org/version/1.1',
@@ -342,39 +344,22 @@ async getJsonData() {
 
     const requestedType = this.request.query ? this.request.query.type : null;
     const { items: allDatabaseItems } = this.content;
-    const totalItemsInDb = allDatabaseItems ? allDatabaseItems.length : 0;
-
-    // --- LINHAS DE DEBUG ---
-    console.log("======================================================");
-    console.log(`[DEBUG] Iniciando getJsonData. Tipo requisitado: ${requestedType}`);
-    console.log(`[DEBUG] Total de itens encontrados no banco de dados: ${totalItemsInDb}`);
-    // --- FIM DO DEBUG ---
     
     publicContent['items'] = [];
     let itemsToProcess = [];
 
-    // CASO 1: É uma requisição para uma seção específica (ex: /json?type=oracao)
+    // Lógica principal de filtragem (idêntica à anterior)
     if (requestedType) {
-        // --- LINHA DE DEBUG ---
-        console.log(`[DEBUG] Entrando no bloco IF para tipo específico.`);
-        // --- FIM DO DEBUG ---
-
         itemsToProcess = (allDatabaseItems || []).filter(item => {
             const metadataRegex = /\[meta\s+type="([^"]+)"/s;
             const metaMatch = (item.description || '').match(metadataRegex);
             const itemType = metaMatch ? metaMatch[1] : null;
             return itemType === requestedType;
         });
-
-    // CASO 2: É a requisição inicial do site (ex: /json)
     } else {
-        // --- LINHA DE DEBUG ---
-        console.log(`[DEBUG] Entrando no bloco ELSE para carga inicial (sem tipo).`);
-        // --- FIM DO DEBUG ---
-        
-        // Passo 1: Busca e formata a Liturgia Diária da API externa.
+        // ... (código para buscar a liturgia e filtrar os santos)
+        // (Copie e cole sua função formatLiturgyData aqui dentro, como antes)
         const formatLiturgyData = (liturgyData) => {
-            // ... (toda a sua função formatLiturgyData aqui, sem alterações)
             let contentHtml = `<h1>${liturgyData.liturgia}</h1>`;
             contentHtml += `<p style="text-transform: capitalize; font-weight: bold;">Cor Litúrgica: ${liturgyData.cor}</p>`;
             const { leituras } = liturgyData;
@@ -433,11 +418,7 @@ async getJsonData() {
                 const liturgyItem = formatLiturgyData(liturgyApiData);
                 publicContent.items.push(liturgyItem);
             }
-        } catch (error) {
-            console.error("Falha ao buscar a liturgia diária:", error);
-        }
-
-        // Passo 2: Filtra APENAS os santos do banco de dados para a carga inicial.
+        } catch (error) { console.error("Falha ao buscar a liturgia diária:", error); }
         itemsToProcess = (allDatabaseItems || []).filter(item => {
             const metadataRegex = /\[meta\s+type="([^"]+)"/s;
             const metaMatch = (item.description || '').match(metadataRegex);
@@ -445,22 +426,31 @@ async getJsonData() {
             return itemType === 'santo';
         });
     }
-    
-    // --- LINHA DE DEBUG ---
-    console.log(`[DEBUG] Total de itens a serem processados APÓS o filtro: ${itemsToProcess.length}`);
-    console.log("======================================================");
-    // --- FIM DO DEBUG ---
 
-    // Agora, processa a lista de itens que foi corretamente filtrada
+    // Processa os itens filtrados
     itemsToProcess.forEach((item) => {
-      if (![STATUSES.PUBLISHED, STATUSES.UNLISTED].includes(item.status)) {
-        return;
-      }
+      if (![STATUSES.PUBLISHED, STATUSES.UNLISTED].includes(item.status)) return;
       this._decorateForItem(item, this.baseUrl);
       const mediaFile = item.mediaFile || {};
       const newItem = this._buildPublicContentItem(item, mediaFile);
       publicContent.items.push(newItem);
     });
+
+    // ==========================================================
+    // --- INÍCIO DA MODIFICAÇÃO DE DIAGNÓSTICO ---
+    // Adiciona um bloco de depuração ao JSON final para sabermos o que está acontecendo.
+    // ==========================================================
+    publicContent['_debug_info'] = {
+        'debug_version': '1.0',
+        'timestamp': new Date().toISOString(),
+        'requested_type': requestedType || 'none (initial load)',
+        'total_items_from_db': allDatabaseItems ? allDatabaseItems.length : 0,
+        'items_processed_after_filter': itemsToProcess.length,
+        'final_item_count_in_response': publicContent.items.length
+    };
+    // ==========================================================
+    // --- FIM DA MODIFICAÇÃO DE DIAGNÓSTICO ---
+    // ==========================================================
 
     publicContent['_microfeed'] = this._buildPublicContentMicrofeedExtra(publicContent);
     return publicContent;
