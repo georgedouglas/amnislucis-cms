@@ -334,7 +334,8 @@ export default class FeedPublicJsonBuilder {
     return newItem;
   }
 
-// SUBSTITUA A FUNÇÃO getJsonData() INTEIRA PELA VERSÃO FINAL DE DIAGNÓSTICO ABAIXO:
+// Onde: edge-src/models/FeedPublicJsonBuilder.js
+// SUBSTITUA A FUNÇÃO getJsonData() INTEIRA PELA VERSÃO ABAIXO:
 
 async getJsonData() {
     const publicContent = {
@@ -342,13 +343,18 @@ async getJsonData() {
       ...this._buildPublicContentChannel(this.content),
     };
 
-    const requestedType = this.request.query ? this.request.query.type : null;
+    // ==========================================================
+    // --- INÍCIO DA CORREÇÃO DEFINITIVA ---
+    // Esta é a maneira correta de ler parâmetros de URL em um ambiente Cloudflare.
+    const url = new URL(this.request.url);
+    const requestedType = url.searchParams.get('type');
+    // --- FIM DA CORREÇÃO DEFINITIVA ---
     const { items: allDatabaseItems } = this.content;
     
     publicContent['items'] = [];
     let itemsToProcess = [];
 
-    // Lógica principal de filtragem (idêntica à anterior)
+    // A lógica if/else abaixo estava correta o tempo todo e agora funcionará.
     if (requestedType) {
         itemsToProcess = (allDatabaseItems || []).filter(item => {
             const metadataRegex = /\[meta\s+type="([^"]+)"/s;
@@ -357,9 +363,9 @@ async getJsonData() {
             return itemType === requestedType;
         });
     } else {
-        // ... (código para buscar a liturgia e filtrar os santos)
-        // (Copie e cole sua função formatLiturgyData aqui dentro, como antes)
+        // Bloco da carga inicial (busca liturgia, filtra santos)
         const formatLiturgyData = (liturgyData) => {
+            // ... (toda a sua função formatLiturgyData aqui, sem alterações)
             let contentHtml = `<h1>${liturgyData.liturgia}</h1>`;
             contentHtml += `<p style="text-transform: capitalize; font-weight: bold;">Cor Litúrgica: ${liturgyData.cor}</p>`;
             const { leituras } = liturgyData;
@@ -427,7 +433,7 @@ async getJsonData() {
         });
     }
 
-    // Processa os itens filtrados
+    // Processa os itens corretamente filtrados
     itemsToProcess.forEach((item) => {
       if (![STATUSES.PUBLISHED, STATUSES.UNLISTED].includes(item.status)) return;
       this._decorateForItem(item, this.baseUrl);
@@ -435,23 +441,7 @@ async getJsonData() {
       const newItem = this._buildPublicContentItem(item, mediaFile);
       publicContent.items.push(newItem);
     });
-
-    // ==========================================================
-    // --- INÍCIO DA MODIFICAÇÃO DE DIAGNÓSTICO ---
-    // Adiciona um bloco de depuração ao JSON final para sabermos o que está acontecendo.
-    // ==========================================================
-    publicContent['_debug_info'] = {
-        'debug_version': '1.0',
-        'timestamp': new Date().toISOString(),
-        'requested_type': requestedType || 'none (initial load)',
-        'total_items_from_db': allDatabaseItems ? allDatabaseItems.length : 0,
-        'items_processed_after_filter': itemsToProcess.length,
-        'final_item_count_in_response': publicContent.items.length
-    };
-    // ==========================================================
-    // --- FIM DA MODIFICAÇÃO DE DIAGNÓSTICO ---
-    // ==========================================================
-
+    
     publicContent['_microfeed'] = this._buildPublicContentMicrofeedExtra(publicContent);
     return publicContent;
 }
