@@ -334,7 +334,7 @@ export default class FeedPublicJsonBuilder {
     return newItem;
   }
 
-// NO ARQUIVO: edge-src/models/FeedPublicJsonBuilder.js
+// SUBSTITUA A FUNÇÃO getJsonData() INTEIRA POR ESTA VERSÃO:
 
 async getJsonData() {
     const publicContent = {
@@ -342,24 +342,32 @@ async getJsonData() {
       ...this._buildPublicContentChannel(this.content),
     };
 
-    // ==========================================================
-    // --- INÍCIO DA MODIFICAÇÃO: LÓGICA DE LAZY LOADING ---
-    // ==========================================================
-    
-    // 1. Pega o parâmetro 'type' da URL. Ex: /json?type=oracao -> requestedType = 'oracao'
     const requestedType = this.request.query ? this.request.query.type : null;
+    const { items: allDatabaseItems } = this.content;
     
-    const {items} = this.content;
-    const existingitems = items || [];
     publicContent['items'] = [];
-    
-    // 2. Se NÃO houver um 'type' específico, é a carga inicial.
-    //    Buscamos e injetamos a liturgia.
-    if (!requestedType) {
+    let itemsToProcess = [];
+
+    // ==========================================================
+    // --- INÍCIO DA LÓGICA CORRIGIDA E SIMPLIFICADA ---
+    // ==========================================================
+
+    // CASO 1: É uma requisição para uma seção específica (ex: /json?type=oracao)
+    if (requestedType) {
+        itemsToProcess = (allDatabaseItems || []).filter(item => {
+            const metadataRegex = /\[meta\s+type="([^"]+)"/s;
+            const metaMatch = (item.description || '').match(metadataRegex);
+            const itemType = metaMatch ? metaMatch[1] : null;
+            return itemType === requestedType;
+        });
+
+    // CASO 2: É a requisição inicial do site (ex: /json)
+    } else {
+        // Passo 1: Busca e formata a Liturgia Diária da API externa.
         const formatLiturgyData = (liturgyData) => {
             let contentHtml = `<h1>${liturgyData.liturgia}</h1>`;
             contentHtml += `<p style="text-transform: capitalize; font-weight: bold;">Cor Litúrgica: ${liturgyData.cor}</p>`;
-
+            // ... (o restante da sua função formatLiturgyData permanece aqui, sem alterações)
             const { leituras } = liturgyData;
             const renderLeituraArray = (leituraArray, tituloDefault) => {
                 let html = '';
@@ -374,7 +382,6 @@ async getJsonData() {
                 }
                 return html;
             };
-            
             if (Object.keys(leituras).length > 0) {
                 contentHtml += `<h2>Leituras</h2>`;
                 contentHtml += renderLeituraArray(leituras.primeiraLeitura, 'Primeira Leitura');
@@ -387,7 +394,6 @@ async getJsonData() {
                     });
                 }
             }
-            
             const { oracoes } = liturgyData;
             if (Object.keys(oracoes).length > 0) {
                 contentHtml += `<h2>Orações</h2>`;
@@ -400,7 +406,6 @@ async getJsonData() {
                     });
                 }
             }
-
             return {
                 id: `liturgia-${liturgyData.data.replace(/\//g, '-')}`,
                 title: `Liturgia Diária: ${liturgyData.data}`,
@@ -408,14 +413,7 @@ async getJsonData() {
                 date_published: new Date().toISOString(),
                 content_html: { pt: contentHtml },
                 content_text: { pt: htmlToPlainText(contentHtml) },
-                _microfeed: {
-                    metadata: {
-                        type: "liturgia",
-                        tags: [liturgyData.cor.toLowerCase()],
-                        color: liturgyData.cor,
-                        date: liturgyData.data
-                    }
-                }
+                _microfeed: { metadata: { type: "liturgia", tags: [liturgyData.cor.toLowerCase()], color: liturgyData.cor, date: liturgyData.data } }
             };
         };
 
@@ -424,33 +422,26 @@ async getJsonData() {
             if (response.ok) {
                 const liturgyApiData = await response.json();
                 const liturgyItem = formatLiturgyData(liturgyApiData);
-                publicContent.items.push(liturgyItem);
+                publicContent.items.push(liturgyItem); // Adiciona a liturgia diretamente
             }
         } catch (error) {
             console.error("Falha ao buscar a liturgia diária:", error);
         }
+
+        // Passo 2: Filtra APENAS os santos do banco de dados para a carga inicial.
+        itemsToProcess = (allDatabaseItems || []).filter(item => {
+            const metadataRegex = /\[meta\s+type="([^"]+)"/s;
+            const metaMatch = (item.description || '').match(metadataRegex);
+            const itemType = metaMatch ? metaMatch[1] : null;
+            return itemType === 'santo';
+        });
     }
 
-    // 3. Filtra os itens do banco de dados com base na regra
-    const itemsToProcess = existingitems.filter(item => {
-        const metadataRegex = /\[meta\s+type="([^"]+)"/s;
-        const metaMatch = (item.description || '').match(metadataRegex);
-        const itemType = metaMatch ? metaMatch[1] : null;
-
-        // Se um tipo foi requisitado, retorna apenas itens daquele tipo
-        if (requestedType) {
-            return itemType === requestedType;
-        }
-        
-        // Se for a carga inicial (sem tipo), retorna apenas os santos
-        return itemType === 'santo';
-    });
-
     // ==========================================================
-    // --- FIM DA MODIFICAÇÃO ---
+    // --- FIM DA LÓGICA CORRIGIDA ---
     // ==========================================================
 
-    // 4. Processa apenas os itens filtrados
+    // Agora, processa a lista de itens que foi corretamente filtrada
     itemsToProcess.forEach((item) => {
       if (![STATUSES.PUBLISHED, STATUSES.UNLISTED].includes(item.status)) {
         return;
