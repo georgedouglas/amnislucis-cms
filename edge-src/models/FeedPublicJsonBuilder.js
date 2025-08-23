@@ -334,8 +334,6 @@ export default class FeedPublicJsonBuilder {
     return newItem;
   }
 
-// SUBSTITUA A FUNÇÃO getJsonData() INTEIRA POR ESTA VERSÃO:
-
 async getJsonData() {
     const publicContent = {
       version: 'https://jsonfeed.org/version/1.1',
@@ -344,16 +342,23 @@ async getJsonData() {
 
     const requestedType = this.request.query ? this.request.query.type : null;
     const { items: allDatabaseItems } = this.content;
+    const totalItemsInDb = allDatabaseItems ? allDatabaseItems.length : 0;
+
+    // --- LINHAS DE DEBUG ---
+    console.log("======================================================");
+    console.log(`[DEBUG] Iniciando getJsonData. Tipo requisitado: ${requestedType}`);
+    console.log(`[DEBUG] Total de itens encontrados no banco de dados: ${totalItemsInDb}`);
+    // --- FIM DO DEBUG ---
     
     publicContent['items'] = [];
     let itemsToProcess = [];
 
-    // ==========================================================
-    // --- INÍCIO DA LÓGICA CORRIGIDA E SIMPLIFICADA ---
-    // ==========================================================
-
     // CASO 1: É uma requisição para uma seção específica (ex: /json?type=oracao)
     if (requestedType) {
+        // --- LINHA DE DEBUG ---
+        console.log(`[DEBUG] Entrando no bloco IF para tipo específico.`);
+        // --- FIM DO DEBUG ---
+
         itemsToProcess = (allDatabaseItems || []).filter(item => {
             const metadataRegex = /\[meta\s+type="([^"]+)"/s;
             const metaMatch = (item.description || '').match(metadataRegex);
@@ -363,11 +368,15 @@ async getJsonData() {
 
     // CASO 2: É a requisição inicial do site (ex: /json)
     } else {
+        // --- LINHA DE DEBUG ---
+        console.log(`[DEBUG] Entrando no bloco ELSE para carga inicial (sem tipo).`);
+        // --- FIM DO DEBUG ---
+        
         // Passo 1: Busca e formata a Liturgia Diária da API externa.
         const formatLiturgyData = (liturgyData) => {
+            // ... (toda a sua função formatLiturgyData aqui, sem alterações)
             let contentHtml = `<h1>${liturgyData.liturgia}</h1>`;
             contentHtml += `<p style="text-transform: capitalize; font-weight: bold;">Cor Litúrgica: ${liturgyData.cor}</p>`;
-            // ... (o restante da sua função formatLiturgyData permanece aqui, sem alterações)
             const { leituras } = liturgyData;
             const renderLeituraArray = (leituraArray, tituloDefault) => {
                 let html = '';
@@ -422,7 +431,7 @@ async getJsonData() {
             if (response.ok) {
                 const liturgyApiData = await response.json();
                 const liturgyItem = formatLiturgyData(liturgyApiData);
-                publicContent.items.push(liturgyItem); // Adiciona a liturgia diretamente
+                publicContent.items.push(liturgyItem);
             }
         } catch (error) {
             console.error("Falha ao buscar a liturgia diária:", error);
@@ -436,10 +445,11 @@ async getJsonData() {
             return itemType === 'santo';
         });
     }
-
-    // ==========================================================
-    // --- FIM DA LÓGICA CORRIGIDA ---
-    // ==========================================================
+    
+    // --- LINHA DE DEBUG ---
+    console.log(`[DEBUG] Total de itens a serem processados APÓS o filtro: ${itemsToProcess.length}`);
+    console.log("======================================================");
+    // --- FIM DO DEBUG ---
 
     // Agora, processa a lista de itens que foi corretamente filtrada
     itemsToProcess.forEach((item) => {
