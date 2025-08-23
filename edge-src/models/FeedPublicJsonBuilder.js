@@ -183,16 +183,43 @@ export default class FeedPublicJsonBuilder {
     return microfeedExtra;
   }
 
-  _buildPublicContentItem(item, mediaFile) {
+// SUBSTITUA A FUNÇÃO _buildPublicContentItem INTEIRA POR ESTA VERSÃO:
+
+_buildPublicContentItem(item, mediaFile) {
     let trackingUrls = [];
     if (this.settings.analytics && this.settings.analytics.urls) {
       trackingUrls = this.settings.analytics.urls || [];
     }
 
+    // ==========================================================
+    // --- INÍCIO DA MODIFICAÇÃO: PROCESSAMENTO DO TÍTULO ---
+    // ==========================================================
+    const rawTitle = item.title || 'untitled';
+    const langRegex = /\[(PT|EN|ES|LA)\](.*?)\[\/\1\]/gs;
+
+    const parsedTitle = {};
+    const titleMatches = [...rawTitle.matchAll(langRegex)];
+
+    if (titleMatches.length > 0) {
+        titleMatches.forEach(match => {
+            const lang = match[1].toLowerCase();
+            const text = match[2].trim();
+            parsedTitle[lang] = text;
+        });
+    } else {
+        // Se não houver tags, assume que o título inteiro é português.
+        parsedTitle['pt'] = rawTitle;
+    }
+
     const newItem = {
       id: item.id,
-      title: item.title || 'untitled',
+      // O título do item agora é o objeto que acabamos de criar.
+      title: parsedTitle,
     };
+    // ==========================================================
+    // --- FIM DA MODIFICAÇÃO: PROCESSAMENTO DO TÍTULO ---
+    // ==========================================================
+
     const attachment = {};
     const _microfeed = {
       is_audio: mediaFile.isAudio,
@@ -207,76 +234,44 @@ export default class FeedPublicJsonBuilder {
       status: ITEM_STATUSES_DICT[item.status] ? ITEM_STATUSES_DICT[item.status].name : 'published',
     };
 
-    // ==========================================================
-    // --- FUNÇÃO SLUGIFY CORRIGIDA ---
-    // Esta versão substitui caracteres acentuados pelos seus equivalentes.
-    // ==========================================================
     const slugify = (text) => {
       const from = "ãàáäâẽèéëêìíïîõòóöôùúüûñç·/_,:;";
       const to = "aaaaaeeeeeiiiiooooouuuunc------";
-      let newText = text.toString().toLowerCase().replace(/\s+/g, '-'); // Troca espaços por hífens
-
+      let newText = text.toString().toLowerCase().replace(/\s+/g, '-');
       for (let i = 0, l = from.length; i < l; i++) {
         newText = newText.replace(new RegExp(from.charAt(i), 'g'), to.charAt(i));
       }
-
-      return newText
-        .replace(/[^\w\-]+/g, '') // Remove todos os caracteres que não são palavras ou hífens
-        .replace(/\-\-+/g, '-')   // Substitui múltiplos hífens por um único
-        .replace(/^-+/, '')      // Remove hífens do início
-        .replace(/-+$/, '');     // Remove hífens do fim
+      return newText.replace(/[^\w\-]+/g, '').replace(/\-\-+/g, '-').replace(/^-+/, '').replace(/-+$/, '');
     };
 
-    _microfeed.slug = slugify(item.title);
-    // ==========================================================
-    // --- FIM DA CORREÇÃO ---
-    // ==========================================================
+    // Gera o slug a partir do título em português para consistência.
+    _microfeed.slug = slugify(parsedTitle.pt || rawTitle);
 
     if (isValidMediaFile(mediaFile)) {
-      if (mediaFile.url) {
-        attachment['url'] = buildAudioUrlWithTracking(mediaFile.url, trackingUrls);
-      }
-      if (mediaFile.contentType) {
-        attachment['mime_type'] = mediaFile.contentType;
-      }
-      if (mediaFile.sizeByte) {
-        attachment['size_in_byte'] = mediaFile.sizeByte;
-      }
-      if (mediaFile.durationSecond) {
-        attachment['duration_in_seconds'] = mediaFile.durationSecond;
-        _microfeed['duration_hhmmss'] = secondsToHHMMSS(mediaFile.durationSecond);
-      }
-      if (Object.keys(attachment).length > 0) {
-        newItem['attachments'] = [attachment];
-      }
+        // ... (o restante do código desta seção permanece o mesmo)
+        if (mediaFile.url) { attachment['url'] = buildAudioUrlWithTracking(mediaFile.url, trackingUrls); }
+        if (mediaFile.contentType) { attachment['mime_type'] = mediaFile.contentType; }
+        if (mediaFile.sizeByte) { attachment['size_in_byte'] = mediaFile.sizeByte; }
+        if (mediaFile.durationSecond) { attachment['duration_in_seconds'] = mediaFile.durationSecond; _microfeed['duration_hhmmss'] = secondsToHHMMSS(mediaFile.durationSecond); }
+        if (Object.keys(attachment).length > 0) { newItem['attachments'] = [attachment]; }
     }
-    if (item.link) {
-      newItem['url'] = item.link;
-    }
-    if (mediaFile.isExternalUrl && mediaFile.url) {
-      newItem['external_url'] = mediaFile.url;
-    }
+    if (item.link) { newItem['url'] = item.link; }
+    if (mediaFile.isExternalUrl && mediaFile.url) { newItem['external_url'] = mediaFile.url; }
     
-    // Suas modificações de [meta] e idiomas (estão corretas e permanecem aqui)
     const metadataRegex = /\[meta\s+type="([^"]+)"\s+tags="([^"]*)"(?:\s+date="([^"]*)")?\]\s*/s;
-    const langRegex = /\[(PT|EN|ES|LA)\](.*?)\[\/\1\]/gs;
     const rawHtml = item.description || '';
-    
     const metaMatch = rawHtml.match(metadataRegex);
     _microfeed.metadata = { type: 'geral', tags: [], date: null };
     let contentAfterMeta = rawHtml;
-
     if (metaMatch) {
         _microfeed.metadata.type = metaMatch[1];
         _microfeed.metadata.tags = metaMatch[2] ? metaMatch[2].split(',').map(t => t.trim()) : [];
         _microfeed.metadata.date = metaMatch[3] || null;
         contentAfterMeta = rawHtml.replace(metadataRegex, '').trim();
     }
-
     newItem.content_html = {};
     newItem.content_text = {};
     let langMatches = [...contentAfterMeta.matchAll(langRegex)];
-
     if (langMatches.length > 0) {
         langMatches.forEach(match => {
             const lang = match[1].toLowerCase();
@@ -289,54 +284,26 @@ export default class FeedPublicJsonBuilder {
         newItem.content_text['pt'] = htmlToPlainText(contentAfterMeta);
     }
     
-    if (item.image) {
-      newItem['image'] = item.image;
-    }
-    if (mediaFile.isImage && mediaFile.url) {
-      newItem['banner_image'] = mediaFile.url;
-    }
-    if (item.pubDateRfc3339) {
-      newItem['date_published'] = item.pubDateRfc3339;
-    }
-    if (item.updatedDateRfc3339) {
-      newItem['date_modified'] = item.updatedDateRfc3339;
-    }
-    if (item.language) {
-      newItem['language'] = item.language;
-    }
+    if (item.image) { newItem['image'] = item.image; }
+    if (mediaFile.isImage && mediaFile.url) { newItem['banner_image'] = mediaFile.url; }
+    if (item.pubDateRfc3339) { newItem['date_published'] = item.pubDateRfc3339; }
+    if (item.updatedDateRfc3339) { newItem['date_modified'] = item.updatedDateRfc3339; }
+    if (item.language) { newItem['language'] = item.language; }
 
-    if (item['itunes:title']) {
-      _microfeed['itunes:title'] = item['itunes:title'];
-    }
-    if (item['itunes:block']) {
-      _microfeed['itunes:block'] = item['itunes:block'];
-    }
-    if (item['itunes:episodeType']) {
-      _microfeed['itunes:episodeType'] = item['itunes:episodeType'];
-    }
-    if (item['itunes:season']) {
-      _microfeed['itunes:season'] = parseInt(item['itunes:season'], 10);
-    }
-    if (item['itunes:episode']) {
-      _microfeed['itunes:episode'] = parseInt(item['itunes:episode'], 10);
-    }
-    if (item['itunes:explicit']) {
-      _microfeed['itunes:explicit'] = item['itunes:explicit'];
-    }
-    if (item.pubDate) {
-      _microfeed['date_published_short'] = item.pubDate;
-    }
-    if (item.pubDateMs) {
-      _microfeed['date_published_ms'] = item.pubDateMs;
-    }
+    if (item['itunes:title']) { _microfeed['itunes:title'] = item['itunes:title']; }
+    if (item['itunes:block']) { _microfeed['itunes:block'] = item['itunes:block']; }
+    if (item['itunes:episodeType']) { _microfeed['itunes:episodeType'] = item['itunes:episodeType']; }
+    if (item['itunes:season']) { _microfeed['itunes:season'] = parseInt(item['itunes:season'], 10); }
+    if (item['itunes:episode']) { _microfeed['itunes:episode'] = parseInt(item['itunes:episode'], 10); }
+    if (item['itunes:explicit']) { _microfeed['itunes:explicit'] = item['itunes:explicit']; }
+    if (item.pubDate) { _microfeed['date_published_short'] = item.pubDate; }
+    if (item.pubDateMs) { _microfeed['date_published_ms'] = item.pubDateMs; }
 
+    // ==========================================================
+    // --- INÍCIO DA ATUALIZAÇÃO DA HIDRATAÇÃO ---
+    // Atualizamos a string JSON para incluir o novo objeto de título.
     const hydrationData = {
-        title: {
-            pt: item.title_pt || item.title || '',
-            en: item.title_en || '',
-            es: item.title_es || '',
-            la: item.title_la || ''
-        },
+        title: parsedTitle,
         content_html: {
             pt: newItem.content_html.pt || '',
             en: newItem.content_html.en || '',
@@ -344,15 +311,12 @@ export default class FeedPublicJsonBuilder {
             la: newItem.content_html.la || ''
         }
     };
-
-    // Transformamos o objeto em uma string JSON segura aqui no backend.
-    // Isso resolve TODOS os problemas de formatação no template.
     _microfeed.hydration_json_string = JSON.stringify(hydrationData);
-    // --- FIM DA CORREÇÃO DEFINITIVA --
+    // --- FIM DA ATUALIZAÇÃO DA HIDRATAÇÃO ---
 
     newItem['_microfeed'] = _microfeed;
     return newItem;
-  }
+}
 
 // Onde: edge-src/models/FeedPublicJsonBuilder.js
 // SUBSTITUA A FUNÇÃO getJsonData() INTEIRA PELA VERSÃO ABAIXO:
